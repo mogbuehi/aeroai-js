@@ -2,15 +2,34 @@ require('dotenv').config();
 const axios = require('axios');
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const fs = require('fs');
+const path = require('path');
+
+// Import prompts
+function importTextFileSync(filePath) {
+    try {
+        // Ensure the path is correct, especially if running from a different directory
+        const absolutePath = path.resolve(filePath);
+        const data = fs.readFileSync(absolutePath, { encoding: 'utf8' });
+        return data;
+    } catch (error) {
+        console.error(`Error reading file: ${error.message}`);
+        return null;
+    }
+}
+
 
 //-----------------------------------------------------------------------------------
 // Function to create an assistant and upload files
 async function createAssistant() {
     const apiKey = process.env.OPENAI_API_KEY; // Make sure to have your API key in an .env file or set as an environment variable
 
+    const filePath = 'prompt.txt'; // Path to your .txt file
+    const fileContent = importTextFileSync(filePath);
+    console.log(fileContent);
+
     const assistantData = {
-        "name": "My New Assistant", // Name your assistant
-        "description": "An assistant that handles various tasks", // Provide a description for your assistant
+        "name": "CBTA Instructor", // Name your assistant
+        "instructions": "", // Provide a description for your assistant
         // Specify other properties as needed, following the OpenAI API documentation
     };
 
@@ -94,7 +113,7 @@ function prettyPrint(messages) {
     console.log();
 }
 
-async function aiAssistant(userInput, threadId, assistantId = 'asst_JdQbD8FoFEfkotbrljaYsBye') {
+async function aiAssistant(userInput, threadId, assistantId) {
     const apiKey = process.env.OPENAI_API_KEY;
     let message = await axios.post(`https://api.openai.com/v1/beta/threads/messages`, {
         thread_id: threadId,
@@ -127,9 +146,37 @@ async function aiAssistant(userInput, threadId, assistantId = 'asst_JdQbD8FoFEfk
     return aiMessage;
 }
 
-async function pdfAgent(convoInput, threadId, assistantId = 'asst_leGWRggA9Ff9k1Pher4Nvp0f') {
-    // Similar structure to aiAssistant, tailored for handling PDF specific tasks
-    // Omitted for brevity - would follow the same pattern of message creation, running the assistant, and processing the output
+async function pdfAgent(convoInput, threadId, assistantId) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    let message = await axios.post(`https://api.openai.com/v1/beta/threads/messages`, {
+        thread_id: threadId,
+        role: "user",
+        content: convoInput
+    }, {
+        headers: {
+            'Authorization': `Bearer ${apiKey}`
+        }
+    });
+
+    let run = await axios.post(`https://api.openai.com/v1/beta/threads/runs`, {
+        thread_id: threadId,
+        assistant_id: assistantId
+    }, {
+        headers: {
+            'Authorization': `Bearer ${apiKey}`
+        }
+    });
+
+    run = await waitOnRun(run.data, threadId);
+
+    const messages = await getResponse(threadId);
+
+    const aiMessage = messages.data[0].content[0].text.value;
+    const convo = `Time: ${new Date().toISOString()}\nUser: ${userInput}\n\nAI: ${aiMessage}\n\nThread_ID: ${threadId}`;
+    
+    // Additional logic for handling the conversation and PDF generation as needed
+
+    return aiMessage;
 }
 
 // Example usage
